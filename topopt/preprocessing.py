@@ -59,7 +59,7 @@ class Preprocessing:
         map vector of degrees of freedom to function on triangular mesh
         degrees of freedom live on quadrilateral 2d mesh, whereas rho lives on uniform triangular 2d mesh
         """
-        array = np.repeat(np.array(x), np.array(2*np.ones(len(x),dtype=int)))
+        array = np.repeat(np.array(x), np.array(2*np.ones(len(x), dtype=int)))
         func = Function(self.DG0)
         func.vector()[:] = array
         return func
@@ -68,7 +68,7 @@ class Preprocessing:
         """
         chainrule of dof_to_control
         """
-        if option ==2:
+        if option == 2:
             return djy[::2]+djy[1::2]
         else:
             return djy.vector()[::2]+djy.vector()[1::2]
@@ -83,10 +83,9 @@ class Preprocessing:
             raise ValueError("Only works for non-Constant y0")
         deltay = y0-y00
         ub = np.ones(len(y0))
-        int1 = np.dot(ub,ub)
-        int2 = np.dot(y00,y00)
+        int1 = np.dot(ub, ub)
+        int2 = np.dot(y00, y00)
         int3 = np.dot(deltay, deltay)
         t = np.sqrt((int1-int2)/int3)
 
-        return y00 +t*deltay
-
+        return y00 + t*deltay
