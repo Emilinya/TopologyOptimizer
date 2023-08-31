@@ -2,6 +2,12 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 from scipy import io
 import numpy as np
+import sys
+import os
+
+sys.path.insert(0, "./designs")
+
+from design_parser import parse_design
 
 # create a colormap from black to light blue
 traa_blue = [91 / 255, 206 / 255, 250 / 255]
@@ -13,29 +19,45 @@ cdict = {
 black2blue = colors.LinearSegmentedColormap("testCmap", segmentdata=cdict)
 
 
-def plot_design(N, eta):
-    data = io.loadmat(f"output/data/design_{N=}_{eta=}.mat")
-    design = data["data"]
-    w, h = data["w"][0, 0], data["h"][0, 0]
+def plot_design(design, data_path, N, eta):
+    data = io.loadmat(data_path)["data"]
 
+    parameters, _ = parse_design(os.path.join("designs", design) + ".json")
+    w, h = parameters.width, parameters.height
+
+    N = int(np.sqrt(data.size / (w * h)))
     Nx, Ny = int(N * w), int(N * h)
-    design = design.reshape((Ny, Nx))
+    data = data.reshape((Ny, Nx))
 
     # rescale so design is between 0 and 1 (why is it not?)
-    minimum, maximum = np.min(design), np.max(design)
-    design = (design - minimum) / (maximum - minimum)
+    minimum, maximum = np.min(data), np.max(data)
+    data = (data - minimum) / (maximum - minimum)
 
     X, Y = np.meshgrid(np.linspace(0, w, Nx), np.linspace(0, h, Ny))
-    plt.pcolormesh(X, Y, design, cmap=black2blue)
+    plt.pcolormesh(X, Y, data, cmap=black2blue)
     plt.colorbar(label=r"$\rho(x, y)$ []")
 
     plt.xlabel("$x$ []")
     plt.ylabel("$y$ []")
-    plt.savefig(f"output/figures/design_{N=}_{eta=}.png", dpi=200)
+
+    output_file = os.path.join("output", design, "figures", f"{N=}_{eta=}") + ".png"
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    plt.savefig(output_file, dpi=200)
     plt.clf()
 
 
-plot_design(40, 0)
-plot_design(40, 40)
-plot_design(40, 200)
-plot_design(40, 1000)
+for design in os.listdir("output"):
+    data_folder = os.path.join("output", design, "data")
+    if not os.path.isdir(data_folder):
+        continue
+
+    for data in os.listdir(data_folder):
+        data_path = os.path.join(data_folder, data)
+        if not os.path.isfile(data_path):
+            continue
+
+        N_str, eta_str = data[:-4].split("_")
+        N = int(N_str.split("=")[1])
+        eta = float(eta_str.split("=")[1])
+
+        plot_design(design, data_path, N, eta)

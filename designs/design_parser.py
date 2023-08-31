@@ -1,56 +1,55 @@
+from dataclasses import dataclass
 import matplotlib.pyplot as plt
 import numpy as np
 import json
 
 
-def create_discretizer(partition_size):
-    def discretize(size):
-        return int(size / partition_size)
-    return discretize
+@dataclass
+class SolverParameters:
+    width: float
+    height: float
+    fraction: float
 
 
-def flow_profile(t, rate, length):
-    return rate*(1 - (2*t/length)**2)
+@dataclass
+class Flow:
+    side: str
+    center: float
+    length: float
+    rate: float
+
+    def __iter__(self):
+        return iter((self.side, self.center, self.length, self.rate))
 
 
-with open("designs/diffuser.json", "r") as design_file:
-    design = json.load(design_file)
+def parse_design(filename):
+    with open(filename, "r") as design_file:
+        design = json.load(design_file)
 
-total_flow = 0
-for flow in design["flows"]:
-    total_flow += flow["rate"] * flow["length"]
+    flows = []
+    for flow_dict in design["flows"]:
+        flows.append(
+            Flow(
+                flow_dict["side"],
+                flow_dict["center"],
+                flow_dict["length"],
+                flow_dict["rate"],
+            )
+        )
 
-if abs(total_flow) > 1e-14:
-    print(f"Illegal design: total flow is {total_flow}, not 0!")
-    exit(1)
+    total_flow = 0
+    for flow in flows:
+        total_flow += flow.rate * flow.length
 
-partition_size = 1e-2
-discretize = create_discretizer(partition_size)
-
-width, height = design["width"], design["height"]
-x_partitions, y_partitions = discretize(width), discretize(height)
-
-boundry_flow_matrix = np.zeros((y_partitions, x_partitions))
-for flow in design["flows"]:
-    rate, length, center = flow["rate"], flow["length"], flow["center"]
-
-    left = discretize(center) - int(discretize(length) / 2)
-    right = left + discretize(length)
-    t_ray = np.linspace(-length/2, length/2, discretize(length))
-    flow_ray = flow_profile(t_ray, rate, length)
-
-    if flow["side"] == "top":
-        boundry_flow_matrix[0, left:right] = flow_ray
-    elif flow["side"] == "left":
-        boundry_flow_matrix[left:right, 0] = flow_ray
-    elif flow["side"] == "bottom":
-        boundry_flow_matrix[-1, left:right] = flow_ray
-    elif flow["side"] == "right":
-        boundry_flow_matrix[left:right, -1] = flow_ray
-    else:
-        print(f"Illegal design: unknown flow direction {flow['size']}")
+    if abs(total_flow) > 1e-14:
+        print(f"Illegal design: total flow is {total_flow}, not 0!")
         exit(1)
 
-plt.imshow(boundry_flow_matrix)
-plt.colorbar()
-plt.show()
+    parameters = SolverParameters(design["width"], design["height"], design["fraction"])
+
+    return parameters, flows
+
+if __name__ == "__main__":
+    parameters, flows = parse_design("designs/pipe_bend.json")
+    print(parameters)
+    print(flows)
