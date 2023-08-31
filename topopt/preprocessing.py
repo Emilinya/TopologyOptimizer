@@ -52,14 +52,14 @@ class Preprocessing:
         """
         self.DG0 = FunctionSpaceDG0
         self.k = len(Function(self.DG0).vector()[:])
-        self.h = 1./N
+        self.h = 1.0 / N
 
     def dof_to_control(self, x):
         """
         map vector of degrees of freedom to function on triangular mesh
         degrees of freedom live on quadrilateral 2d mesh, whereas rho lives on uniform triangular 2d mesh
         """
-        array = np.repeat(np.array(x), np.array(2*np.ones(len(x), dtype=int)))
+        array = np.repeat(np.array(x), np.array(2 * np.ones(len(x), dtype=int)))
         func = Function(self.DG0)
         func.vector()[:] = array
         return func
@@ -69,23 +69,23 @@ class Preprocessing:
         chainrule of dof_to_control
         """
         if option == 2:
-            return djy[::2]+djy[1::2]
+            return djy[::2] + djy[1::2]
         else:
-            return djy.vector()[::2]+djy.vector()[1::2]
+            return djy.vector()[::2] + djy.vector()[1::2]
 
     def move_onto_sphere(self, y0, V, delta):
         """
         y0 describes the density function defined on the uniform quadrilateral mesh,
         described in Sec. 7.6
         """
-        y00 = (2.*V/delta-1.)*np.ones(len(y0))
+        y00 = (2.0 * V / delta - 1.0) * np.ones(len(y0))
         if (y00 - y0).all() < 1e-14:
             raise ValueError("Only works for non-Constant y0")
-        deltay = y0-y00
+        deltay = y0 - y00
         ub = np.ones(len(y0))
         int1 = np.dot(ub, ub)
         int2 = np.dot(y00, y00)
         int3 = np.dot(deltay, deltay)
-        t = np.sqrt((int1-int2)/int3)
+        t = np.sqrt((int1 - int2) / int3)
 
-        return y00 + t*deltay
+        return y00 + t * deltay
