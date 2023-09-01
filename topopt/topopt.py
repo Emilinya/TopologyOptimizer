@@ -7,6 +7,8 @@ import sys
 import os
 
 df.set_log_level(df.LogLevel.ERROR)
+# turn off redundant output in parallel
+df.parameters["std_out_all_processes"] = False
 
 import Hs_regularization as Hs_reg
 from ipopt_solver import IPOPTSolver, IPOPTProblem
@@ -49,10 +51,10 @@ class FlowBC(dfa.UserExpression):
                 values[0] += self.get_flow(pos[1], center, length, rate)
             elif side == "right" and pos[0] == self.domain_size[0]:
                 values[0] -= self.get_flow(pos[1], center, length, rate)
-            elif side == "top" and pos[1] == 0.0:
-                values[1] += self.get_flow(pos[0], center, length, rate)
-            elif side == "bottom" and pos[1] == self.domain_size[1]:
+            elif side == "top" and pos[1] == self.domain_size[1]:
                 values[1] -= self.get_flow(pos[0], center, length, rate)
+            elif side == "bottom" and pos[1] == 0:
+                values[1] += self.get_flow(pos[0], center, length, rate)
 
     def value_shape(self):
         return (2,)
@@ -237,9 +239,6 @@ class FluidSolver:
 
 
 if __name__ == "__main__":
-    # turn off redundant output in parallel
-    df.parameters["std_out_all_processes"] = False
-
     N = 40
     solver = FluidSolver("designs/twin_pipe.json", N)
     solver.solve()
