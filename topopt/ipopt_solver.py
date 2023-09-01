@@ -86,7 +86,7 @@ class IPOPTProblem:
 
 
 class IPOPTSolver(OptimizationSolver):
-    def __init__(self, problem, parameters=None):
+    def __init__(self, problem, eta, eta_idx, num_etas, parameters=None, noisy=False):
         try:
             import cyipopt
         except ImportError:
@@ -94,13 +94,15 @@ class IPOPTSolver(OptimizationSolver):
                 "You need to install cyipopt. (It is recommended to install IPOPT with HSL support!)"
             )
             raise
+        self.eta_data = (eta, eta_idx, num_etas)
+        self.is_noisy = noisy
         self.problem = problem
         self.problem_obj = self.create_problem_obj(problem)
 
         print("Initialization of IPOPTSolver finished")
 
     def create_problem_obj(self, problem):
-        return IPOPTSolver.opt_prob(problem)
+        return IPOPTSolver.opt_prob(problem, self.eta_data, self.is_noisy)
 
     def test_objective(self, k):
         # check dof_to_deformation with first order derivative check
@@ -185,14 +187,18 @@ class IPOPTSolver(OptimizationSolver):
         return order1, diff1
 
     class opt_prob(object):
-        def __init__(self, problem):
+        def __init__(self, problem, eta_data, noisy):
+            self.eta_data = eta_data
+            self.is_noisy = noisy
+            self.iterations = 0
             self.problem = problem
             self.x = np.ones(self.problem.trafo_matrix.shape[0])
             self.y = self.problem.transformation(self.x)
 
         def trafo(self, x):
             if (abs(self.x - x) > 1e-14).any():
-                print("recompute transformation")
+                if self.is_noisy:
+                    print("recompute transformation")
                 self.x = x
                 self.y = self.problem.transformation(x)
             return self.y
@@ -202,7 +208,8 @@ class IPOPTSolver(OptimizationSolver):
             # The callback for calculating the objective
             #
             # x to deformation
-            print("evaluate objective")
+            if self.is_noisy:
+                print("evaluate objective")
             tx = self.trafo(x)
             rho = self.problem.preprocessing.dof_to_control(tx)
             j = 0
@@ -220,12 +227,14 @@ class IPOPTSolver(OptimizationSolver):
             # The callback for calculating the gradient
             #
             # print('evaluate derivative of objective funtion')
-            print("evaluate gradient")
+            if self.is_noisy:
+                print("evaluate gradient")
             tx = self.trafo(x)
             rho = self.problem.preprocessing.dof_to_control(tx)
             # savety feature:
             if max(abs(self.problem.Jhat[0].get_controls() - rho.vector()[:])) > 1e-12:
-                print("update control")
+                if self.is_noisy:
+                    print("update control")
                 [
                     self.problem.Jhat[i](rho.vector()[:])
                     for i in range(len(self.problem.Jhat))
@@ -243,7 +252,8 @@ class IPOPTSolver(OptimizationSolver):
         def constraints(self, x):
             #
             # The callback for calculating the constraints
-            print("evaluate constraint")
+            if self.is_noisy:
+                print("evaluate constraint")
             xt = self.trafo(x)
             rho = self.problem.preprocessing.dof_to_control(xt)
             constraints = []
@@ -258,7 +268,8 @@ class IPOPTSolver(OptimizationSolver):
             #
             # The callback for calculating the Jacobian
             #
-            print("evaluate jacobian")
+            if self.is_noisy:
+                print("evaluate jacobian")
             xt = self.trafo(x)
             rho = self.problem.preprocessing.dof_to_control(xt)
             dconstraints = []
@@ -268,7 +279,8 @@ class IPOPTSolver(OptimizationSolver):
                 max(abs(self.problem.constraints[0].get_controls() - rho.vector()[:]))
                 > 1e-12
             ):
-                print("update control")
+                if self.is_noisy:
+                    print("update control")
                 [
                     self.problem.constraints[i](rho.vector()[:])
                     for i in range(len(self.problem.constraints))
@@ -295,10 +307,15 @@ class IPOPTSolver(OptimizationSolver):
             alpha_pr,
             ls_trials,
         ):
-            #
-            # Example for the use of the intermediate callback.
-            #
-            print("Objective value at iteration ", iter_count, " is ", obj_value)
+            if iter_count == 0:
+                eta, eta_idx, num_etas = self.eta_data
+                print(f"  Solving with penalty η={eta} ({eta_idx+1}/{num_etas})")
+                print("──────────┬───────────┬──────────────")
+                print("Iteration │ Objective │ Gradient norm")
+                print("──────────┼───────────┼──────────────")
+            obj_digits = int(np.log10(obj_value)) + 1
+            print(f"{iter_count:^9} │ {obj_value:.{8-obj_digits}f} │ {d_norm:^.7e}")
+            self.iterations += 1
             return
 
     def solve(self, x0):
@@ -327,6 +344,7 @@ class IPOPTSolver(OptimizationSolver):
         # initial point trafo
         x0 = self.problem.initial_point_trafo(x0)
 
+        nlp.add_option("print_level", 0)
         nlp.add_option("mu_strategy", "adaptive")
         nlp.add_option("hessian_approximation", "limited-memory")
         nlp.add_option("limited_memory_update_type", "bfgs")
@@ -340,5 +358,6 @@ class IPOPTSolver(OptimizationSolver):
         nlp.add_option("tol", 1e-3)
 
         x, info = nlp.solve(x0)
+        print()
         x = self.problem.transformation(x)
-        return x
+        return x, self.problem_obj.iterations, info["obj_val"]

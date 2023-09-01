@@ -225,17 +225,17 @@ class FluidSolver:
                 inner_product_matrix,
                 reg,
             )
-            ipopt = IPOPTSolver(problem)
+            ipopt = IPOPTSolver(problem, eta, j, len(etas))
 
-            self.x0 = ipopt.solve(self.x0)
-            self.save_control(self.x0, eta)
+            self.x0, iterations, objective = ipopt.solve(self.x0)
+            self.save_control(self.x0, eta, iterations, objective)
 
-    def save_control(self, x0, eta):
+    def save_control(self, x0, eta, iterations, objective):
         design = os.path.splitext(os.path.basename(self.design_file))[0]
         filename = f"output/{design}/data/N={self.N}_{eta=}.mat"
 
         os.makedirs(os.path.dirname(filename), exist_ok=True)
-        io.savemat(filename, mdict={"data": x0})
+        io.savemat(filename, mdict={"data": x0, "info": [iterations, objective]})
 
 
 if __name__ == "__main__":
