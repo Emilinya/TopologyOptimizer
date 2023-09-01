@@ -16,6 +16,13 @@ import cyipopt
 import matplotlib.pyplot as plt
 
 
+def print_status(status):
+    status = str(status)[2:-1]
+    status = status.replace(" (can be specified by options)", "")
+    status = status.replace(" (can be specified by an option)", "")
+    print("EXIT: " + status)
+
+
 class IPOPTProblem:
     def __init__(
         self,
@@ -99,7 +106,8 @@ class IPOPTSolver(OptimizationSolver):
         self.problem = problem
         self.problem_obj = self.create_problem_obj(problem)
 
-        print("Initialization of IPOPTSolver finished")
+        if self.is_noisy:
+            print("Initialization of IPOPTSolver finished")
 
     def create_problem_obj(self, problem):
         return IPOPTSolver.opt_prob(problem, self.eta_data, self.is_noisy)
@@ -358,6 +366,7 @@ class IPOPTSolver(OptimizationSolver):
         nlp.add_option("tol", 1e-3)
 
         x, info = nlp.solve(x0)
+        print_status(info["status_msg"])
         print()
         x = self.problem.transformation(x)
         return x, self.problem_obj.iterations, info["obj_val"]
