@@ -11,9 +11,7 @@ This program is based on [TopOpt](https://github.com/JohannesHaubner/TopOpt) by 
 The program is run using `run.py`. This program takes in two command line arguments; a design file and a domain size. The folder `designs` contains some design files, and you can easily make a custom design using those files as a template. If the design is `path/to/design_example.json`, the output of the program is saved to `output/design_example/data`. The produced data can be visualized with `save_plots.py`, which automatically reads all the data files, and produces corresponding figures in `output/design_example/figures`
 
 ### Docker
-TopologyOptimizer uses fenics-dolfin, which is not available on windows. The TopOpt project includes a
-docker image which makes running the program on windows easy. As it is not my docker image, I can't
-guarantee that it will work forever. To use the Docker, simply run
+TopologyOptimizer uses fenics-dolfin, which is not available on Windows. The TopOpt project includes a docker image which makes running the program on Windows easy. As it is not my docker image, I can't guarantee that it will work forever. To use the Docker, simply run
 
 ```bash
 docker pull ghcr.io/johanneshaubner/topopt:latest
@@ -34,8 +32,7 @@ conda install tqdm
 ```
 
 ### Conda
-If you are using linux (or wsl), you can run the program using conda. I have not
-tested that this works, so the following text is simply copied from the TopOpt repository:
+If you are using Linux (or wsl), you can run the program using conda. I have not tested that this works, so the following text is simply copied from the TopOpt repository:
 
 ```bash
 conda env create -f environment.yml --experimental-solver=libmamba
@@ -51,11 +48,10 @@ It has to be ensured that the [conda-libmamba-solver](https://github.com/conda-i
 
 For practical problems it is furthermore necessary to link IPOPT against HSL when compiling (see comment in http://www.dolfin-adjoint.org/en/release/documentation/stokes-topology/stokes-topology.html).
 
-For running the MMA examples, it is required to clone the github repository https://github.com/arjendeetman/GCMMA-MMA-Python into the folder mma/MMA_Python.
+For running the MMA examples, it is required to clone the GitHub repository https://github.com/arjendeetman/GCMMA-MMA-Python into the folder mma/MMA_Python.
 
 ## Running Tests
-In theory, tests exists, but I have not gotten them to run. The original repository said
-"To run tests, run the following command"
+In theory, tests exists, but I have not gotten them to run. The original repository said "To run tests, run the following command:"
 
 ```bash
 pytest
