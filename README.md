@@ -7,9 +7,37 @@ This program is based on [TopOpt](https://github.com/JohannesHaubner/TopOpt) by 
 
 ## Usage/Examples
 
-### Conda
+### Running
+The program is run using `run.py`. This program takes in two command line arguments; a design file and a domain size. The folder `designs` contains some design files, and you can easily make a custom design using those files as a template. If the design is `path/to/design_example.json`, the output of the program is saved to `output/design_example/data`. The produced data can be visualized with `save_plots.py`, which automatically reads all the data files, and produces corresponding figures in `output/design_example/figures`
 
+### Docker
+TopologyOptimizer uses fenics-dolfin, which is not available on windows. The TopOpt project includes a
+docker image which makes running the program on windows easy. As it is not my docker image, I can't
+guarantee that it will work forever. To use the Docker, simply run
+
+```bash
+docker pull ghcr.io/johanneshaubner/topopt:latest
+
+cd topopt
+docker run -it -v $(pwd):/topopt ghcr.io/johanneshaubner/topopt
 ```
+
+Then, in the Docker container, you can run the program as normal:
+```bash
+python3 run.py designs/twin_pipe 40
+```
+
+NB: `save_plots.py` uses the tqdm package, which is not included in the image. Luckily, tqdm
+can simply be installed with  
+```bash
+conda install tqdm
+```
+
+### Conda
+If you are using linux (or wsl), you can run the program using conda. I have not
+tested that this works, so the following text is simply copied from the TopOpt repository:
+
+```bash
 conda env create -f environment.yml --experimental-solver=libmamba
 conda activate topopt
 
@@ -25,27 +53,15 @@ For practical problems it is furthermore necessary to link IPOPT against HSL whe
 
 For running the MMA examples, it is required to clone the github repository https://github.com/arjendeetman/GCMMA-MMA-Python into the folder mma/MMA_Python.
 
-### Docker
-Alternatively, also Docker can be used (only built for linux/amd64 platforms):
-```
-docker pull ghcr.io/johanneshaubner/topopt:latest
-
-cd topopt
-docker run -it -v $(pwd):/topopt ghcr.io/johanneshaubner/topopt
-```
-In the Docker container:
-
-```
-python3 topopt/topopt.py
-```
-
 ## Running Tests
-
-To run tests, run the following command
+In theory, tests exists, but I have not gotten them to run. The original repository said
+"To run tests, run the following command"
 
 ```bash
 pytest
 ```
+
+But doing this with the docker image simply says `bash: pytest: command not found`.
 
 ## License
 

@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 from scipy import io
 import numpy as np
+from tqdm import tqdm
 import sys
 import os
 
@@ -46,18 +47,23 @@ def plot_design(design, data_path, N, eta):
     plt.clf()
 
 
-for design in os.listdir("output"):
-    data_folder = os.path.join("output", design, "data")
-    if not os.path.isdir(data_folder):
-        continue
-
-    for data in os.listdir(data_folder):
-        data_path = os.path.join(data_folder, data)
-        if not os.path.isfile(data_path):
+if __name__ == "__main__":
+    designs = []
+    for design in os.listdir("output"):
+        data_folder = os.path.join("output", design, "data")
+        if not os.path.isdir(data_folder):
             continue
 
-        N_str, eta_str = data[:-4].split("_")
-        N = int(N_str.split("=")[1])
-        eta = float(eta_str.split("=")[1])
+        for data in os.listdir(data_folder):
+            data_path = os.path.join(data_folder, data)
+            if not os.path.isfile(data_path):
+                continue
 
-        plot_design(design, data_path, N, eta)
+            N_str, eta_str = data[:-4].split("_")
+            N = int(N_str.split("=")[1])
+            eta = float(eta_str.split("=")[1])
+
+            designs.append((design, data_path, N, eta))
+
+    for design in tqdm(designs):
+        plot_design(*design)
