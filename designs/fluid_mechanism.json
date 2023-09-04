@@ -1,0 +1,20 @@
+{
+    "objective": "maximize_flow",
+    "width": 5,
+    "height": 1,
+    "fraction": 0.333333333333333,
+    "flows": [
+        {
+            "side": "left",
+            "center": 0.5,
+            "length": 1,
+            "rate": 1
+        }
+    ],
+    "no_slip": ["top", "bottom"],
+    "zero_pressure": ["right"],
+    "max_region": {
+        "bottom_left": [2.5, 0.525],
+        "top_right": [2.5, 0.475]
+    }
+}

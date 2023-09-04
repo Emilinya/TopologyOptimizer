@@ -35,7 +35,7 @@ black2blue = colors.LinearSegmentedColormap("testCmap", segmentdata=cdict)
 def plot_design(design, data_path, N, eta):
     data = io.loadmat(data_path)["data"]
 
-    parameters, _ = parse_design(os.path.join("designs", design) + ".json")
+    parameters, *_ = parse_design(os.path.join("designs", design) + ".json")
     w, h = parameters.width, parameters.height
 
     N = int(np.sqrt(data.size / (w * h)))

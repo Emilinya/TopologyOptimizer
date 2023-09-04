@@ -29,7 +29,63 @@ except ImportError:
     raise
 
 
-# Define the boundary condition on velocity
+class SidesDomain(df.SubDomain):
+    def __init__(self, domain_size, sides):
+        super(SidesDomain, self).__init__()
+        self.domain_size = domain_size
+        self.sides = sides
+
+    def inside(self, pos, on_boundary):
+        if not on_boundary:
+            return False
+
+        for side in self.sides:
+            if side == "left" and df.near(pos[0], (0.0)):
+                return True
+            elif side == "right" and df.near(pos[0], (self.domain_size[0])):
+                return True
+            elif side == "top" and df.near(pos[1], (self.domain_size[1])):
+                return True
+            elif side == "bottom" and df.near(pos[1], (0.0)):
+                return True
+        return False
+
+
+class RegionDomain(df.SubDomain):
+    def __init__(self, x_region, y_region):
+        super(RegionDomain, self).__init__()
+        self.x_region = x_region
+        self.y_region = y_region
+
+    def inside(self, pos, _):
+        return df.between(pos[0], self.x_region) and df.between(pos[1], self.y_region)
+
+
+class PointDomain(df.SubDomain):
+    def __init__(self, point):
+        super(PointDomain, self).__init__()
+        self.point = point
+
+    def inside(self, x, _):
+        return df.near(x[0], (self.point[0])) and df.near(x[1], (self.point[1]))
+
+
+class MarkerWrapper:
+    def __init__(self, mesh):
+        self.marker = df.cpp.mesh.MeshFunctionSizet(mesh, 1)
+        self.marker.set_all(0)
+        self.label_to_idx = {}
+        self.idx = 1
+
+    def add(self, subDomain, label):
+        subDomain.mark(self.marker, self.idx)
+        self.label_to_idx[label] = self.idx
+        self.idx += 1
+
+    def get(self, label):
+        return (self.marker, self.label_to_idx[label])
+
+
 class FlowBC(dfa.UserExpression):
     def __init__(self, **kwargs):
         super(FlowBC, self).__init__(kwargs)
@@ -60,18 +116,14 @@ class FlowBC(dfa.UserExpression):
         return (2,)
 
 
-# Define the boundary condition on pressure
-class PressureBC(df.SubDomain):
-    def inside(self, x, _):
-        return df.near(x[0], (0.0)) and df.near(x[1], (0.0))
-
-
 class FluidSolver:
     def __init__(self, design_file, N):
         self.design_file = design_file
-        parameters, flows = parse_design(self.design_file)
+        parameters, flows, no_slip, zero_pressure, max_region = parse_design(
+            self.design_file
+        )
 
-        # define constatns
+        # define constants
         viscosity = dfa.Constant(1.0)
         self.alpha_max = 2.5 * viscosity / (0.01**2)
 
@@ -79,6 +131,7 @@ class FluidSolver:
         self.N = N
         self.width = parameters.width
         self.height = parameters.height
+        domain_size = (self.width, self.height)
 
         Nx, Ny = int(self.width * self.N), int(self.height * self.N)
 
@@ -100,18 +153,65 @@ class FluidSolver:
         pressure_space = df.FiniteElement("CG", mesh.ufl_cell(), 1)
         self.solution_space = df.FunctionSpace(mesh, velocity_space * pressure_space)
 
-        # define boundary conditions
-        flowBC = FlowBC(degree=2, domain_size=(self.width, self.height), flows=flows)
-        pressureBC = PressureBC()
-        self.boundary_conditions = [
-            dfa.DirichletBC(self.solution_space.sub(0), flowBC, "on_boundary"),
-            dfa.DirichletBC(
-                self.solution_space.sub(1),
-                dfa.Constant(0.0),
-                pressureBC,
-                method="pointwise",
-            ),
-        ]
+        if parameters.objective == "maximize_flow":
+            # define boundary conditions
+            marker = MarkerWrapper(mesh)
+
+            marker.add(SidesDomain(domain_size, [flow.side for flow in flows]), "flow")
+
+            if max_region:
+                marker.add(
+                    RegionDomain(max_region.x_region, max_region.y_region), "max"
+                )
+
+            if zero_pressure:
+                sides = [side for side in zero_pressure.sides]
+                marker.add(SidesDomain(domain_size, sides), "zero_pressure")
+            else:
+                marker.add(PointDomain((0, 0)), "zero_pressure")
+
+            if no_slip:
+                sides = [side for side in no_slip.sides]
+                marker.add(SidesDomain(domain_size, sides), "no_slip")
+
+            self.boundary_conditions = [
+                dfa.DirichletBC(
+                    self.solution_space.sub(0),
+                    FlowBC(
+                        degree=2, domain_size=(self.width, self.height), flows=flows
+                    ),
+                    *marker.get("flow"),
+                ),
+                dfa.DirichletBC(
+                    self.solution_space.sub(1),
+                    dfa.Constant(0.0),
+                    *marker.get("zero_pressure"),
+                ),
+            ]
+
+            if no_slip:
+                self.boundary_conditions.append(
+                    dfa.DirichletBC(
+                        self.solution_space.sub(0),
+                        dfa.Constant((0.0, 0.0)),
+                        *marker.get("no_slip"),
+                    )
+                )
+        else:
+            # define boundary conditions
+            self.boundary_conditions = [
+                dfa.DirichletBC(
+                    self.solution_space.sub(0),
+                    FlowBC(degree=2, domain_size=domain_size, flows=flows),
+                    "on_boundary",
+                ),
+                dfa.DirichletBC(
+                    self.solution_space.sub(1),
+                    dfa.Constant(0.0),
+                    PointDomain(point=(0, 0)),
+                    method="pointwise",
+                ),
+            ]
 
         # create initial conditions
         k = Nx * Ny * 2
@@ -127,10 +227,15 @@ class FluidSolver:
         (u, _) = df.split(w)
 
         # objective function
-        J = dfa.assemble(
-            0.5 * df.inner(self.alpha(rho) * u, u) * df.dx
-            + 0.5 * viscosity * df.inner(df.grad(u), df.grad(u)) * df.dx
-        )
+        if parameters.objective == "minimize_power":
+            J = dfa.assemble(
+                0.5 * df.inner(self.alpha(rho) * u, u) * df.dx
+                + 0.5 * viscosity * df.inner(df.grad(u), df.grad(u)) * df.dx
+            )
+        elif parameters.objective == "maximize_flow":
+            ds = df.Measure("dS", domain=mesh, subdomain_data=marker.marker)
+            J = dfa.assemble(df.inner(df.avg(u), dfa.Constant((1.0, 0))) * ds(1))
+
         # penalty term in objective function
         J2 = dfa.assemble(
             ufl.Max(rho - 1.0, 0.0) ** 2 * df.dx + ufl.Max(-rho - 1.0, 0.0) ** 2 * df.dx
@@ -151,6 +256,24 @@ class FluidSolver:
             dfa.ReducedFunctional(volume_constraint, self.control),
             dfa.ReducedFunctional(spherical_constraint, self.control),
         ]
+
+        if parameters.objective == "maximize_flow":
+            # reference value (what is this?)
+            wref = self.forward(dfa.Constant(1.0))
+            uref, _ = wref.split(deepcopy=True)
+            ref = dfa.assemble(
+                0.5 * viscosity * df.inner(df.grad(uref), df.grad(uref)) * df.dx
+            )
+
+            dissipation_constraint = (
+                dfa.assemble(
+                    0.5 * df.inner(self.alpha(rho) * u, u) * df.dx
+                    + 0.5 * viscosity * df.inner(df.grad(u), df.grad(u)) * df.dx
+                )
+                / (130 * ref)
+                - 1.0
+            )
+            self.constraints.append(dissipation_constraint)
 
     def alpha(self, rho):
         """Inverse permeability as a function of rho, equation (40)"""
@@ -189,12 +312,20 @@ class FluidSolver:
 
         # different weights for H_sigma matrix
         weights = [1.0, 0.01, 0.01, 0.001]
+
         # different penalization parameters
+        objective_scale = 1
         etas = [0, 40, 200, 1000]
+
         # [[lower bound vc, upper bound vc],[lower bound sc, upper bound sc]]
-        bounds = [[[0.0, 0.0], [-1.0, 0.0]]] + [[[-1e6, 0.0], [0.0, 0.0]]] * 3
+        initial_bound = [[0.0, 0.0], [-1.0, 0.0]]
+        main_bounds = [[-1e6, 0.0], [0.0, 0.0]]
+        bounds = [initial_bound] + [main_bounds] * (len(etas) - 1)
 
         for j, (weight, eta, bound) in enumerate(zip(weights, etas, bounds)):
+            # we must scale eta so match the magnitude of the objective function
+            scaled_eta = eta * objective_scale
+
             # update inner product
             # consider L2-mass-matrix + weighting * Hs-matrix
             sigma = 7.0 / 16
@@ -203,7 +334,7 @@ class FluidSolver:
             ).get_matrix(weight)
 
             # for performance reasons we first add J and J2 and hand the sum over to the IPOPT solver
-            J_ = self.Js[0] + eta * self.Js[1]
+            J_ = self.Js[0] + scaled_eta * self.Js[1]
             Jhat = [dfa.ReducedFunctional(J_, self.control)]
             # Note: the evaluation of the gradient can be speed up since the adjoint solve requires no pde solve
             # (see Appendix A.4)
@@ -217,7 +348,7 @@ class FluidSolver:
             # solve optimization problem
             problem = IPOPTProblem(
                 Jhat,
-                [1.0, eta],
+                [1.0, scaled_eta],
                 self.constraints,
                 scaling_constraints,
                 bound,
@@ -225,10 +356,10 @@ class FluidSolver:
                 inner_product_matrix,
                 reg,
             )
-            ipopt = IPOPTSolver(problem, eta, j, len(etas))
+            ipopt = IPOPTSolver(problem, scaled_eta, j, len(etas))
 
             self.x0, iterations, objective = ipopt.solve(self.x0)
-            self.save_control(self.x0, eta, iterations, objective)
+            self.save_control(self.x0, scaled_eta, iterations, objective)
 
     def save_control(self, x0, eta, iterations, objective):
         design = os.path.splitext(os.path.basename(self.design_file))[0]

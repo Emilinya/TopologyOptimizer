@@ -1,8 +1,8 @@
 {
+    "objective": "minimize_power",
     "width": 1,
     "height": 1,
     "fraction": 0.5,
-    "penalty": 0.1,
     "flows": [
         {
             "side": "left",
