@@ -40,13 +40,13 @@ class SidesDomain(df.SubDomain):
             return False
 
         for side in self.sides:
-            if side == "left" and df.near(pos[0], (0.0)):
+            if side == "left" and df.near(pos[0], 0.0):
                 return True
-            elif side == "right" and df.near(pos[0], (self.domain_size[0])):
+            elif side == "right" and df.near(pos[0], self.domain_size[0]):
                 return True
-            elif side == "top" and df.near(pos[1], (self.domain_size[1])):
+            elif side == "top" and df.near(pos[1], self.domain_size[1]):
                 return True
-            elif side == "bottom" and df.near(pos[1], (0.0)):
+            elif side == "bottom" and df.near(pos[1], 0.0):
                 return True
         return False
 
@@ -67,7 +67,7 @@ class PointDomain(df.SubDomain):
         self.point = point
 
     def inside(self, x, _):
-        return df.near(x[0], (self.point[0])) and df.near(x[1], (self.point[1]))
+        return df.near(x[0], self.point[0]) and df.near(x[1], self.point[1])
 
 
 class MarkerWrapper:
@@ -153,33 +153,18 @@ class FluidSolver:
         pressure_space = df.FiniteElement("CG", mesh.ufl_cell(), 1)
         self.solution_space = df.FunctionSpace(mesh, velocity_space * pressure_space)
 
+        # define boundary conditions
         if parameters.objective == "maximize_flow":
-            # define boundary conditions
             marker = MarkerWrapper(mesh)
-
+            marker.add(RegionDomain(max_region.x_region, max_region.y_region), "max")
             marker.add(SidesDomain(domain_size, [flow.side for flow in flows]), "flow")
-
-            if max_region:
-                marker.add(
-                    RegionDomain(max_region.x_region, max_region.y_region), "max"
-                )
-
-            if zero_pressure:
-                sides = [side for side in zero_pressure.sides]
-                marker.add(SidesDomain(domain_size, sides), "zero_pressure")
-            else:
-                marker.add(PointDomain((0, 0)), "zero_pressure")
-
-            if no_slip:
-                sides = [side for side in no_slip.sides]
-                marker.add(SidesDomain(domain_size, sides), "no_slip")
+            marker.add(SidesDomain(domain_size, zero_pressure.sides), "zero_pressure")
+            marker.add(SidesDomain(domain_size, no_slip.sides), "no_slip")
 
             self.boundary_conditions = [
                 dfa.DirichletBC(
                     self.solution_space.sub(0),
-                    FlowBC(
-                        degree=2, domain_size=(self.width, self.height), flows=flows
-                    ),
+                    FlowBC(degree=2, domain_size=domain_size, flows=flows),
                     *marker.get("flow"),
                 ),
                 dfa.DirichletBC(
@@ -187,18 +172,13 @@ class FluidSolver:
                     dfa.Constant(0.0),
                     *marker.get("zero_pressure"),
                 ),
+                dfa.DirichletBC(
+                    self.solution_space.sub(0),
+                    dfa.Constant((0.0, 0.0)),
+                    *marker.get("no_slip"),
+                ),
             ]
-
-            if no_slip:
-                self.boundary_conditions.append(
-                    dfa.DirichletBC(
-                        self.solution_space.sub(0),
-                        dfa.Constant((0.0, 0.0)),
-                        *marker.get("no_slip"),
-                    )
-                )
         else:
-            # define boundary conditions
             self.boundary_conditions = [
                 dfa.DirichletBC(
                     self.solution_space.sub(0),
@@ -258,7 +238,7 @@ class FluidSolver:
         ]
 
         if parameters.objective == "maximize_flow":
-            # reference value (what is this?)
+            # reference value
             wref = self.forward(dfa.Constant(1.0))
             uref, _ = wref.split(deepcopy=True)
             ref = dfa.assemble(
@@ -273,7 +253,10 @@ class FluidSolver:
                 / (130 * ref)
                 - 1.0
             )
-            self.constraints.append(dissipation_constraint)
+
+            self.constraints.append(
+                dfa.ReducedFunctional(dissipation_constraint, self.control)
+            )
 
     def alpha(self, rho):
         """Inverse permeability as a function of rho, equation (40)"""
@@ -305,26 +288,26 @@ class FluidSolver:
 
     def solve(self):
         # scaling of constraints for Ipopt
-        scaling_constraints = [1.0, 1.0]
+        scaling_constraints = [1.0] * len(self.constraints)
 
         # regularization parameter
-        reg = 10.0
+        # reg = 10.0
+        reg = 1e-6
 
         # different weights for H_sigma matrix
-        weights = [1.0, 0.01, 0.01, 0.001]
+        weights = [0.1, 0.01, 0.01, 0.001]
 
         # different penalization parameters
-        objective_scale = 1
         etas = [0, 40, 200, 1000]
 
         # [[lower bound vc, upper bound vc],[lower bound sc, upper bound sc]]
-        initial_bound = [[0.0, 0.0], [-1.0, 0.0]]
-        main_bounds = [[-1e6, 0.0], [0.0, 0.0]]
-        bounds = [initial_bound] + [main_bounds] * (len(etas) - 1)
+        initial_bounds = [[0.0, 0.0], [-1.0, 0.0], [-1e6, 0.0]]
+        main_bounds = [[-1e6, 0.0], [0.0, 0.0], [-1e6, 0.0]]
+        bounds_list = [initial_bounds] + [main_bounds] * (len(etas) - 1)
 
-        for j, (weight, eta, bound) in enumerate(zip(weights, etas, bounds)):
+        for j, (weight, eta, bounds) in enumerate(zip(weights, etas, bounds_list)):
             # we must scale eta so match the magnitude of the objective function
-            scaled_eta = eta * objective_scale
+            scaled_eta = eta / 100
 
             # update inner product
             # consider L2-mass-matrix + weighting * Hs-matrix
@@ -348,10 +331,10 @@ class FluidSolver:
             # solve optimization problem
             problem = IPOPTProblem(
                 Jhat,
-                [1.0, scaled_eta],
+                [1.0],
                 self.constraints,
                 scaling_constraints,
-                bound,
+                bounds,
                 self.preprocessing,
                 inner_product_matrix,
                 reg,
