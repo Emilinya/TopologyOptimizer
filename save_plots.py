@@ -61,7 +61,7 @@ def plot_design(design, data_path, N, eta):
     output_file = os.path.join("output", design, "figures", f"{N=}_{eta=}") + ".png"
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     plt.savefig(output_file, dpi=200, bbox_inches='tight')
-    plt.clf()
+    plt.close()
 
 
 if __name__ == "__main__":

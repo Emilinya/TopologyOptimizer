@@ -16,15 +16,20 @@ import cyipopt
 import matplotlib.pyplot as plt
 
 def constrain(number, digits):
-    if number == 0:
-        return f"{number:.{digits - 1}f}"
+    try:
+        if number == 0:
+            return f"{number:.{digits - 1}f}"
 
-    is_negative = number < 0
-    obj_digits = int(np.log10(abs(number))) + 1
-    if obj_digits <= 0:
-        return f"{number:.{digits - 5 - is_negative}e}"
+        is_negative = number < 0
+        obj_digits = int(np.log10(abs(number))) + 1
+        if obj_digits <= 0:
+            return f"{number:.{digits - 5 - is_negative}e}"
 
-    return f"{number:.{digits-obj_digits-is_negative}f}"
+        return f"{number:.{digits-obj_digits-is_negative}f}"
+    except:
+        # It would be stupid if the printing code crashed the optimizer,
+        # wrap it in a try except just in case
+        return "?"*digits
 
 
 def print_status(status):
