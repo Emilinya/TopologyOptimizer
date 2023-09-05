@@ -15,6 +15,17 @@ import cyipopt
 
 import matplotlib.pyplot as plt
 
+def constrain(number, digits):
+    if number == 0:
+        return f"{number:.{digits - 1}f}"
+
+    is_negative = number < 0
+    obj_digits = int(np.log10(abs(number))) + 1
+    if obj_digits <= 0:
+        return f"{number:.{digits - 5 - is_negative}e}"
+
+    return f"{number:.{digits-obj_digits-is_negative}f}"
+
 
 def print_status(status):
     status = str(status)[2:-1]
@@ -321,8 +332,7 @@ class IPOPTSolver(OptimizationSolver):
                 print("──────────┬───────────┬──────────────")
                 print("Iteration │ Objective │ Gradient norm")
                 print("──────────┼───────────┼──────────────")
-            obj_digits = int(np.log10(obj_value)) + 1
-            print(f"{iter_count:^9} │ {obj_value:.{8-obj_digits}f} │ {d_norm:^.7e}")
+            print(f"{iter_count:^9} │ {constrain(obj_value, 8)} │   {constrain(d_norm, 8)}")
             self.iterations += 1
             return
 
