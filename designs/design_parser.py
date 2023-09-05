@@ -104,10 +104,14 @@ def parse_design(filename):
 
     max_region = None
     if design.get("max_region"):
-        left, bottom = design["max_region"]["bottom_left"]
-        right, top = design["max_region"]["top_right"]
-        x_region = (float(left), float(right))
-        y_region = (float(bottom), float(top))
+        center = design["max_region"]["center"]
+        cx, cy = float(center[0]), float(center[1])
+
+        size = design["max_region"]["size"]
+        w, h = float(size[0]), float(size[1])
+
+        x_region = (cx - w / 2, cx + w / 2)
+        y_region = (cy - h / 2, cy + h / 2)
         max_region = MaxRegion(x_region, y_region)
 
     elif parameters.objective == "maximize_flow":

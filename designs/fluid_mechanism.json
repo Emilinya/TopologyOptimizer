@@ -14,7 +14,7 @@
     "no_slip": ["top", "bottom"],
     "zero_pressure": ["right"],
     "max_region": {
-        "bottom_left": [2.5, 0.475],
-        "top_right": [2.5, 0.525]
+        "center": [2.5, 0.5],
+        "size": [0, 0.05]
     }
 }
