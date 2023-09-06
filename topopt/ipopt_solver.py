@@ -336,7 +336,7 @@ class IPOPTSolver(OptimizationSolver):
 
         cl = []
         cu = []
-        for i in range(len(self.problem.bounds)):
+        for i in range(len(self.problem.constraints)):
             cl.append(self.problem.scaling_constraints[i] * self.problem.bounds[i][0])
             cu.append(self.problem.scaling_constraints[i] * self.problem.bounds[i][1])
 
