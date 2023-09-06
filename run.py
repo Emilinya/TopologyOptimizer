@@ -6,13 +6,6 @@ sys.path.insert(0, "./src")
 from fluid_solver import FluidSolver
 
 
-def print_use():
-    print(
-        f"  python3 {sys.argv[0]} <design file> <domain size (N)>  "
-        + "Run program with custom parameters defined in a design file"
-    )
-
-
 if __name__ == "__main__":
     if len(sys.argv) == 3:
         got_error = False
@@ -31,10 +24,10 @@ if __name__ == "__main__":
 
         if got_error:
             print("This program is used as follows:")
-            print_use()
+            print(f"  python3 {sys.argv[0]} <design file> <domain size (N)>")
         else:
             solver = FluidSolver(design_file, N)
             solver.solve()
     else:
         print("Got an invalid number of arguments. This program is used as follows:")
-        print_use()
+        print(f"  python3 {sys.argv[0]} <design file> <domain size (N)>")
