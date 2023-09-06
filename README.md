@@ -26,7 +26,7 @@ docker run -it -v $(pwd):/topopt ghcr.io/johanneshaubner/topopt
 
 Then, in the Docker container, you can run the program as normal:
 ```bash
-python3 run.py designs/twin_pipe 40
+python3 run.py designs/twin_pipe.json 40
 ```
 
 ### Conda
