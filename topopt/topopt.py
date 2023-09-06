@@ -166,44 +166,45 @@ class FluidSolver:
         self.solution_space = df.FunctionSpace(mesh, velocity_space * pressure_space)
 
         # define boundary conditions
-        if self.parameters.objective == "maximize_flow":
-            marker = MarkerWrapper(mesh)
-            marker.add(RegionDomain(max_region), "max")
-            marker.add(SidesDomain(domain_size, [flow.side for flow in flows]), "flow")
-            marker.add(SidesDomain(domain_size, zero_pressure.sides), "zero_pressure")
-            marker.add(SidesDomain(domain_size, no_slip.sides), "no_slip")
+        marker = MarkerWrapper(mesh)
 
-            self.boundary_conditions = [
-                dfa.DirichletBC(
-                    self.solution_space.sub(0),
-                    FlowBC(degree=2, domain_size=domain_size, flows=flows),
-                    *marker.get("flow"),
-                ),
-                dfa.DirichletBC(
-                    self.solution_space.sub(1),
-                    dfa.Constant(0.0),
-                    *marker.get("zero_pressure"),
-                ),
-                dfa.DirichletBC(
-                    self.solution_space.sub(0),
-                    dfa.Constant((0.0, 0.0)),
-                    *marker.get("no_slip"),
-                ),
-            ]
+        flow_sides = [flow.side for flow in flows]
+        marker.add(SidesDomain(domain_size, flow_sides), "flow")
+
+        if zero_pressure:
+            marker.add(SidesDomain(domain_size, zero_pressure.sides), "zero_pressure")
         else:
-            self.boundary_conditions = [
-                dfa.DirichletBC(
-                    self.solution_space.sub(0),
-                    FlowBC(degree=2, domain_size=domain_size, flows=flows),
-                    "on_boundary",
-                ),
-                dfa.DirichletBC(
-                    self.solution_space.sub(1),
-                    dfa.Constant(0.0),
-                    PointDomain(point=(0, 0)),
-                    method="pointwise",
-                ),
-            ]
+            # default pressure boundary condition: 0 at(0, 0)
+            marker.add(PointDomain((0, 0)), "zero_pressure")
+
+        if no_slip:
+            marker.add(SidesDomain(domain_size, no_slip.sides), "no_slip")
+        else:
+            # assume no slip conditions where there is no flow
+            all_sides = ["left", "right", "top", "bottom"]
+            no_slip_sides = list(set(all_sides).difference(flow_sides))
+            marker.add(SidesDomain(domain_size, no_slip_sides), "no_slip")
+
+        if max_region:
+            marker.add(RegionDomain(max_region), "max")
+
+        self.boundary_conditions = [
+            dfa.DirichletBC(
+                self.solution_space.sub(0),
+                FlowBC(degree=2, domain_size=domain_size, flows=flows),
+                *marker.get("flow"),
+            ),
+            dfa.DirichletBC(
+                self.solution_space.sub(1),
+                dfa.Constant(0.0),
+                *marker.get("zero_pressure"),
+            ),
+            dfa.DirichletBC(
+                self.solution_space.sub(0),
+                dfa.Constant((0.0, 0.0)),
+                *marker.get("no_slip"),
+            ),
+        ]
 
         # create initial conditions
         k = Nx * Ny * 2
@@ -227,7 +228,9 @@ class FluidSolver:
         elif self.parameters.objective == "maximize_flow":
             domain_data, domain_idx = marker.get("max")
             ds = df.Measure("dS", domain=mesh, subdomain_data=domain_data)
-            J = dfa.assemble(df.inner(df.avg(u), dfa.Constant((1.0, 0))) * ds(domain_idx))
+            J = dfa.assemble(
+                df.inner(df.avg(u), dfa.Constant((1.0, 0))) * ds(domain_idx)
+            )
 
         # penalty term in objective function
         J2 = dfa.assemble(
@@ -338,7 +341,9 @@ class FluidSolver:
             ).get_matrix(weight)
 
             # for performance reasons we first add J and J2 and hand the sum over to the IPOPT solver
-            Jhat = dfa.ReducedFunctional(self.Js[0] + scaled_eta * self.Js[1], self.control)
+            Jhat = dfa.ReducedFunctional(
+                self.Js[0] + scaled_eta * self.Js[1], self.control
+            )
             # Note: the evaluation of the gradient can be speed up since the adjoint solve requires no pde solve
             # (see Appendix A.4)
 
