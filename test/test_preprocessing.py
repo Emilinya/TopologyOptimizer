@@ -1,10 +1,11 @@
-import pytest
-import preprocessing
-import ipopt_solver
-import numpy as np
-
 from dolfin import *
 from dolfin_adjoint import *
+
+from src.preprocessing import Preprocessing
+from src.ipopt_solver import IPOPTSolver
+import numpy as np
+import pytest
+
 
 def setting(N):
     # simplified setting
@@ -24,7 +25,7 @@ def test_chainrule():
     # simplified setting
     N = 10
     mesh, B, k = setting(N)
-    preproc = preprocessing.Preprocessing(N, B)
+    preproc = Preprocessing(N, B)
 
     # degrees of freedom
     b = Function(B)
@@ -52,7 +53,7 @@ def test_chainrule():
 
     # first order check
     print('First order check for preprocessing.dof_to_control................................')
-    order1, diff1 = ipopt_solver.IPOPTSolver.perform_first_order_check(jlist, j0, dj, ds, epslist)
+    order1, diff1 = IPOPTSolver.perform_first_order_check(jlist, j0, dj, ds, epslist)
 
     assert order1[-1] > 1.8
 
@@ -66,7 +67,7 @@ def test_move_onto_sphere_valueerror():
     y00 = (2. * V / delta - 1.) * np.ones(int(k/2))
 
     with pytest.raises(ValueError):
-        preprocessing.Preprocessing(N, B).move_onto_sphere(y00, V, delta)
+        Preprocessing(N, B).move_onto_sphere(y00, V, delta)
 
 def test_move_onto_sphere():
     # setting
@@ -74,7 +75,7 @@ def test_move_onto_sphere():
     mesh, B, k = setting(N)
     delta = 1.0
     V = 0.33
-    preproc = preprocessing.Preprocessing(N, B)
+    preproc = Preprocessing(N, B)
 
     # projection of 0
     y00 = (2. * V / delta - 1.) * np.ones(int(k/2))

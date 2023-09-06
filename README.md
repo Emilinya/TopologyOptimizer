@@ -84,13 +84,10 @@ The design files are written in json, and the settings are:
     Description: The sides where there is no pressure. If not set, pressure is 0 at (0, 0).
 
 ## Running Tests
-In theory, tests exists, but I have not gotten them to run. The original repository said "To run tests, run the following command:"
-
+To run tests, run the following command:
 ```bash
 pytest
 ```
-
-But doing this with the docker image simply says `bash: pytest: command not found`.
 
 ## License
 
