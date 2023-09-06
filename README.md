@@ -73,7 +73,7 @@ The design files are written in json, and the settings are:
 7. max_region \
     Allowed values: 
     - center: `(float, float)`
-    - size: `(0, 0.05)`
+    - size: `(float, float)`
 
     Description: The region where you want to maximize flow. Mandatory for the "maximize_flow" objective, does nothing for the "minimize_power" objective. The desired flow direction is currently hardcoded to (-1, 0).
 6. no_slip (optional) \
