@@ -8,21 +8,13 @@ from fluid_solver import FluidSolver
 
 def print_use():
     print(
-        f"  python3 {sys.argv[0]} default                          "
-        + "Run program with default (hardcoded) values"
-    )
-    print(
         f"  python3 {sys.argv[0]} <design file> <domain size (N)>  "
         + "Run program with custom parameters defined in a design file"
     )
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 2:
-        N = 10
-        solver = FluidSolver("designs/pipe_bend.json", N)
-        solver.solve()
-    elif len(sys.argv) == 3:
+    if len(sys.argv) == 3:
         got_error = False
 
         design_file = sys.argv[1]
