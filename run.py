@@ -1,9 +1,9 @@
 import os
 import sys
 
-sys.path.insert(0, "./topopt")
+sys.path.insert(0, "./src")
 
-from topopt import FluidSolver
+from fluid_solver import FluidSolver
 
 
 def print_use():

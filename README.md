@@ -8,7 +8,7 @@ This program is based on [TopOpt](https://github.com/JohannesHaubner/TopOpt) by 
 ## Usage/Examples
 
 ### Running
-The program is run using `run.py`. This program takes in two command line arguments; a design file and a domain size. The folder `designs` contains some design files, and you can easily make a custom design using those files as a template. If the design is `path/to/design_example.json`, the output of the program is saved to `output/design_example/data`. The produced data can be visualized with `save_plots.py`, which automatically reads all the data files, and produces corresponding figures in `output/design_example/figures`
+The program is run using `run.py`. This program takes in two command line arguments; a design file and a domain size. The folder `designs` contains some design files, and you can easily make a custom design using those files as a template. If the design is `path/to/design_example.json`, the output of the program is saved to `output/design_example/data`. The produced data can be visualized with `plot.py`, which automatically reads all the data files, and produces corresponding figures in `output/design_example/figures`
 
 ### Docker
 TopologyOptimizer uses fenics-dolfin, which is not available on Windows. The TopOpt project includes a docker image which makes running the program on Windows easy. As it is not my docker image, I can't guarantee that it will work forever. To use the Docker, simply run

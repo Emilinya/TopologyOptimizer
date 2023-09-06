@@ -100,8 +100,15 @@ def plot_design(design, data_path, N, eta):
 
 
 if __name__ == "__main__":
+    selected_designs = None
+    if len(sys.argv) > 1:
+        selected_designs = sys.argv[1:]
+
     designs = []
     for design in os.listdir("output"):
+        if selected_designs and design not in selected_designs:
+            continue
+
         data_folder = os.path.join("output", design, "data")
         if not os.path.isdir(data_folder):
             continue
@@ -117,5 +124,6 @@ if __name__ == "__main__":
 
             designs.append((design, data_path, N, eta))
 
-    for design in tqdm(designs):
-        plot_design(*design)
+    if len(designs) > 0:
+        for design in tqdm(designs):
+            plot_design(*design)

@@ -72,20 +72,20 @@ class PointDomain(df.SubDomain):
         return df.near(x[0], self.point[0]) and df.near(x[1], self.point[1])
 
 
-class MarkerWrapper:
+class MeshFunctionWrapper:
     def __init__(self, mesh):
-        self.marker = df.cpp.mesh.MeshFunctionSizet(mesh, 1)
-        self.marker.set_all(0)
+        self.meshFunction = df.cpp.mesh.MeshFunctionSizet(mesh, 1)
+        self.meshFunction.set_all(0)
         self.label_to_idx = {}
         self.idx = 1
 
     def add(self, subDomain, label):
-        subDomain.mark(self.marker, self.idx)
+        subDomain.mark(self.meshFunction, self.idx)
         self.label_to_idx[label] = self.idx
         self.idx += 1
 
     def get(self, label):
-        return (self.marker, self.label_to_idx[label])
+        return (self.meshFunction, self.label_to_idx[label])
 
 
 class FlowBC(dfa.UserExpression):
@@ -166,7 +166,7 @@ class FluidSolver:
         self.solution_space = df.FunctionSpace(mesh, velocity_space * pressure_space)
 
         # define boundary conditions
-        marker = MarkerWrapper(mesh)
+        marker = MeshFunctionWrapper(mesh)
 
         flow_sides = [flow.side for flow in flows]
         marker.add(SidesDomain(domain_size, flow_sides), "flow")
@@ -226,10 +226,10 @@ class FluidSolver:
                 + 0.5 * viscosity * df.inner(df.grad(u), df.grad(u)) * df.dx
             )
         elif self.parameters.objective == "maximize_flow":
-            domain_data, domain_idx = marker.get("max")
-            ds = df.Measure("dS", domain=mesh, subdomain_data=domain_data)
+            subdomain_data, subdomain_idx = marker.get("max")
+            ds = df.Measure("dS", domain=mesh, subdomain_data=subdomain_data)
             J = dfa.assemble(
-                df.inner(df.avg(u), dfa.Constant((1.0, 0))) * ds(domain_idx)
+                df.inner(df.avg(u), dfa.Constant((1.0, 0))) * ds(subdomain_idx)
             )
 
         # penalty term in objective function
