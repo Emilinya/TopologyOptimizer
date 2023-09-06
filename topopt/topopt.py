@@ -52,10 +52,12 @@ class SidesDomain(df.SubDomain):
 
 
 class RegionDomain(df.SubDomain):
-    def __init__(self, x_region, y_region):
+    def __init__(self, region):
         super(RegionDomain, self).__init__()
-        self.x_region = x_region
-        self.y_region = y_region
+        cx, cy = region.center
+        w, h = region.size
+        self.x_region = (cx - w / 2, cx + w / 2)
+        self.y_region = (cy - h / 2, cy + h / 2)
 
     def inside(self, pos, _):
         return df.between(pos[0], self.x_region) and df.between(pos[1], self.y_region)
@@ -119,9 +121,19 @@ class FlowBC(dfa.UserExpression):
 class FluidSolver:
     def __init__(self, design_file, N):
         self.design_file = design_file
-        parameters, flows, no_slip, zero_pressure, max_region = parse_design(
+        self.parameters, flows, no_slip, zero_pressure, max_region = parse_design(
             self.design_file
         )
+
+        if self.parameters.objective == "maximize_flow":
+            # why 2 / N? I would understant 1 / N, but why twice that?
+            if max_region.size[0] < 2 / N and max_region.size[1] < 2 / N:
+                print(
+                    "Error: max region is too small. "
+                    + f"It's size is ({max_region.size[0]:.10g}, {max_region.size[1]:.10g}), "
+                    + f"but either the width or height must be ≥ {2/N}",
+                )
+                exit(1)
 
         # define constants
         viscosity = dfa.Constant(1.0)
@@ -129,13 +141,13 @@ class FluidSolver:
 
         # define domain
         self.N = N
-        self.width = parameters.width
-        self.height = parameters.height
+        self.width = self.parameters.width
+        self.height = self.parameters.height
         domain_size = (self.width, self.height)
 
         Nx, Ny = int(self.width * self.N), int(self.height * self.N)
 
-        volume_fraction = parameters.fraction
+        volume_fraction = self.parameters.fraction
         self.V = self.width * self.height * volume_fraction
         mesh = dfa.Mesh(
             dfa.RectangleMesh(
@@ -154,9 +166,9 @@ class FluidSolver:
         self.solution_space = df.FunctionSpace(mesh, velocity_space * pressure_space)
 
         # define boundary conditions
-        if parameters.objective == "maximize_flow":
+        if self.parameters.objective == "maximize_flow":
             marker = MarkerWrapper(mesh)
-            marker.add(RegionDomain(max_region.x_region, max_region.y_region), "max")
+            marker.add(RegionDomain(max_region), "max")
             marker.add(SidesDomain(domain_size, [flow.side for flow in flows]), "flow")
             marker.add(SidesDomain(domain_size, zero_pressure.sides), "zero_pressure")
             marker.add(SidesDomain(domain_size, no_slip.sides), "no_slip")
@@ -207,14 +219,15 @@ class FluidSolver:
         (u, _) = df.split(w)
 
         # objective function
-        if parameters.objective == "minimize_power":
+        if self.parameters.objective == "minimize_power":
             J = dfa.assemble(
                 0.5 * df.inner(self.alpha(rho) * u, u) * df.dx
                 + 0.5 * viscosity * df.inner(df.grad(u), df.grad(u)) * df.dx
             )
-        elif parameters.objective == "maximize_flow":
-            ds = df.Measure("dS", domain=mesh, subdomain_data=marker.marker)
-            J = dfa.assemble(df.inner(df.avg(u), dfa.Constant((1.0, 0))) * ds(1))
+        elif self.parameters.objective == "maximize_flow":
+            domain_data, domain_idx = marker.get("max")
+            ds = df.Measure("dS", domain=mesh, subdomain_data=domain_data)
+            J = dfa.assemble(df.inner(df.avg(u), dfa.Constant((1.0, 0))) * ds(domain_idx))
 
         # penalty term in objective function
         J2 = dfa.assemble(
@@ -237,7 +250,7 @@ class FluidSolver:
             dfa.ReducedFunctional(spherical_constraint, self.control),
         ]
 
-        if parameters.objective == "maximize_flow":
+        if self.parameters.objective == "maximize_flow":
             # reference value
             wref = self.forward(dfa.Constant(1.0))
             uref, _ = wref.split(deepcopy=True)
@@ -291,47 +304,53 @@ class FluidSolver:
         scaling_constraints = [1.0] * len(self.constraints)
 
         # regularization parameter
-        # reg = 10.0
-        reg = 1e-6
+        if self.parameters.objective == "maximize_flow":
+            reg = 1e-6
+        else:
+            reg = 10.0
 
         # different weights for H_sigma matrix
-        weights = [0.1, 0.01, 0.01, 0.001]
+        if self.parameters.objective == "maximize_flow":
+            weights = [0.1, 0.01, 0.01, 0.001]
+        else:
+            weights = [1, 0.01, 0.01, 0.001]
 
         # different penalization parameters
         etas = [0, 40, 200, 1000]
+        if self.parameters.objective == "maximize_flow":
+            eta_scale = 1 / 100
+        else:
+            eta_scale = 1
 
-        # [[lower bound vc, upper bound vc],[lower bound sc, upper bound sc]]
+        # [lower bound, upper bound], for the three constrainst (volume, spherical, dissapation)
         initial_bounds = [[0.0, 0.0], [-1.0, 0.0], [-1e6, 0.0]]
         main_bounds = [[-1e6, 0.0], [0.0, 0.0], [-1e6, 0.0]]
         bounds_list = [initial_bounds] + [main_bounds] * (len(etas) - 1)
 
         for j, (weight, eta, bounds) in enumerate(zip(weights, etas, bounds_list)):
-            # we must scale eta so match the magnitude of the objective function
-            scaled_eta = eta / 100
+            # we must scale eta to match the magnitude of the objective function
+            scaled_eta = eta * eta_scale
 
             # update inner product
             # consider L2-mass-matrix + weighting * Hs-matrix
-            sigma = 7.0 / 16
             inner_product_matrix = Hs_reg.AssembleHs(
-                self.N, self.width, sigma
+                self.N, self.width / self.height, 7.0 / 16
             ).get_matrix(weight)
 
             # for performance reasons we first add J and J2 and hand the sum over to the IPOPT solver
-            J_ = self.Js[0] + scaled_eta * self.Js[1]
-            Jhat = [dfa.ReducedFunctional(J_, self.control)]
+            Jhat = dfa.ReducedFunctional(self.Js[0] + scaled_eta * self.Js[1], self.control)
             # Note: the evaluation of the gradient can be speed up since the adjoint solve requires no pde solve
             # (see Appendix A.4)
 
             if j != 0:
                 # move x0 onto sphere
                 self.x0 = self.preprocessing.move_onto_sphere(
-                    self.x0, self.V, self.width
+                    self.x0, self.V, self.width / self.height
                 )
 
             # solve optimization problem
             problem = IPOPTProblem(
                 Jhat,
-                [1.0],
                 self.constraints,
                 scaling_constraints,
                 bounds,

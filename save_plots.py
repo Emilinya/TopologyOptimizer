@@ -10,15 +10,18 @@ try:
 except ModuleNotFoundError:
 
     def tqdm(values):
-        if len(values) == 1:
-            yield values[0]
+        N = len(values)
+        if N == 0:
+            return []
+        if N == 1:
+            return [values[0]]
 
         terminal_size = os.get_terminal_size().columns - 1
         for i, v in enumerate(values):
-            progress_str = f"{i+1}/{len(values)}"
+            progress_str = f"{i+1}/{N}"
             marker_space = terminal_size - (5 + len(progress_str))
 
-            progress = i / (len(values) - 1)
+            progress = i / (N - 1)
             markers = int(progress * marker_space)
 
             print(
@@ -57,7 +60,13 @@ black2blue = colors.LinearSegmentedColormap("testCmap", segmentdata=cdict)
 
 
 def plot_design(design, data_path, N, eta):
-    data = io.loadmat(data_path)["data"]
+    mat = io.loadmat(data_path)
+    data = mat["data"]
+    iterations, objective = mat.get("info", [[None, None]])[0]
+    if iterations:
+        iterations = int(iterations)
+    if objective:
+        objective = f"{objective:.3g}"
 
     parameters, *_ = parse_design(os.path.join("designs", design) + ".json")
     w, h = parameters.width, parameters.height
@@ -71,6 +80,7 @@ def plot_design(design, data_path, N, eta):
     data = (data - minimum) / (maximum - minimum)
 
     plt.figure(figsize=(6.4 * w / h, 4.8))
+    plt.rcParams.update({'font.size': 10 * np.sqrt(w / h)})
 
     X, Y = np.meshgrid(np.linspace(0, w, Nx), np.linspace(0, h, Ny))
     plt.pcolormesh(X, Y, data, cmap=black2blue)
@@ -81,6 +91,7 @@ def plot_design(design, data_path, N, eta):
 
     plt.xlabel("$x$ []")
     plt.ylabel("$y$ []")
+    plt.title(f"{N=}, eta={eta:.5g}, {iterations=}, objective={objective}")
 
     output_file = os.path.join("output", design, "figures", f"{N=}_{eta=}") + ".png"
     os.makedirs(os.path.dirname(output_file), exist_ok=True)

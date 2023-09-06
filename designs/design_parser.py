@@ -24,19 +24,14 @@ class Flow:
 
 
 @dataclass
-class NoSlip:
+class Sides:
     sides: [str]
 
 
 @dataclass
-class ZeroPressure:
-    sides: [str]
-
-
-@dataclass
-class MaxRegion:
-    x_region: (float, float)
-    y_region: (float, float)
+class Region:
+    center: (float, float)
+    size: (float, float)
 
 
 def parse_design(filename):
@@ -89,7 +84,7 @@ def parse_design(filename):
                 print(f"Legal sides are: {', '.join(legal_directions)}")
                 exit(1)
             sides.append(side)
-        no_slip = NoSlip(sides)
+        no_slip = Sides(sides)
 
     zero_pressure = None
     if design.get("zero_pressure"):
@@ -100,7 +95,7 @@ def parse_design(filename):
                 print(f"Legal sides are: {', '.join(legal_directions)}")
                 exit(1)
             sides.append(side)
-        zero_pressure = ZeroPressure(sides)
+        zero_pressure = Sides(sides)
 
     max_region = None
     if design.get("max_region"):
@@ -110,12 +105,9 @@ def parse_design(filename):
         size = design["max_region"]["size"]
         w, h = float(size[0]), float(size[1])
 
-        x_region = (cx - w / 2, cx + w / 2)
-        y_region = (cy - h / 2, cy + h / 2)
-        max_region = MaxRegion(x_region, y_region)
-
+        max_region = Region((cx, cy), (w, h))
     elif parameters.objective == "maximize_flow":
-        print("Error: Got maximize flow objective with no max region")
+        print("Error: Got maximize flow objective with no max region!")
         exit(1)
 
     return parameters, flows, no_slip, zero_pressure, max_region

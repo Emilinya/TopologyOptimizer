@@ -43,7 +43,6 @@ class IPOPTProblem:
     def __init__(
         self,
         Jhat,
-        scaling_Jhat,
         constraints,
         scaling_constraints,
         bounds,
@@ -52,9 +51,7 @@ class IPOPTProblem:
         reg,
     ):
         """
-        Jhat:                   list of different objective function summands
-        scaling_Jhat:           list of floats with same length as Jhat that specifies how the sum of the different
-                                objective function summands is taken
+        Jhat:                   objective function
         constraints:            list of constraints
         scaling_constraints:    list with same length as constraints that specifies scaling of constraints
         bounds:                 list with same length as constraints, each element being a tuple of a lower and upper
@@ -63,8 +60,7 @@ class IPOPTProblem:
         inner_product_matrix:   inner product that Ipopt should use, discrete hack via sparse Cholesky
         reg:                    regularization parameter
         """
-        self.Jhat = [ReducedFunctionalNumPy(Jhat[i]) for i in range(len(Jhat))]
-        self.scaling_Jhat = scaling_Jhat
+        self.Jhat = ReducedFunctionalNumPy(Jhat)
         self.constraints = [
             ReducedFunctionalNumPy(constraints[i]) for i in range(len(constraints))
         ]
@@ -236,11 +232,7 @@ class IPOPTSolver(OptimizationSolver):
                 print("evaluate objective")
             tx = self.trafo(x)
             rho = self.problem.preprocessing.dof_to_control(tx)
-            j = 0
-            for i in range(len(self.problem.Jhat)):
-                j += self.problem.scaling_Jhat[i] * self.problem.Jhat[i](
-                    rho.vector()[:]
-                )
+            j = self.problem.Jhat(rho.vector()[:])
             j += (
                 0.5 * self.problem.reg * np.dot(np.asarray(x), np.asarray(x))
             )  # regularization
@@ -256,18 +248,15 @@ class IPOPTSolver(OptimizationSolver):
             tx = self.trafo(x)
             rho = self.problem.preprocessing.dof_to_control(tx)
             # savety feature:
-            if max(abs(self.problem.Jhat[0].get_controls() - rho.vector()[:])) > 1e-12:
+            if max(abs(self.problem.Jhat.get_controls() - rho.vector()[:])) > 1e-12:
                 if self.is_noisy:
                     print("update control")
                 [
-                    self.problem.Jhat[i](rho.vector()[:])
-                    for i in range(len(self.problem.Jhat))
+                    self.problem.Jhat(rho.vector()[:])
                 ]
-            dJf = np.zeros(len(rho.vector()[:]))
-            for i in range(len(self.problem.Jhat)):
-                dJf += self.problem.scaling_Jhat[i] * self.problem.Jhat[i].derivative(
-                    forget=False, project=False
-                )
+            dJf = self.problem.Jhat.derivative(
+                forget=False, project=False
+            )
             dJ = self.problem.preprocessing.dof_to_control_chainrule(dJf, 2)
             dJ = self.problem.transformation_chainrule(dJ)
             dJ += self.problem.reg * x
