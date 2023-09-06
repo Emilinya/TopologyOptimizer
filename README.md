@@ -25,12 +25,6 @@ Then, in the Docker container, you can run the program as normal:
 python3 run.py designs/twin_pipe 40
 ```
 
-NB: `save_plots.py` uses the tqdm package, which is not included in the image. Luckily, tqdm
-can simply be installed with  
-```bash
-conda install tqdm
-```
-
 ### Conda
 If you are using Linux (or wsl), you can run the program using conda. I have not tested that this works, so the following text is simply copied from the TopOpt repository:
 

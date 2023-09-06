@@ -2,9 +2,33 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 from scipy import io
 import numpy as np
-from tqdm import tqdm
 import sys
 import os
+
+try:
+    from tqdm import tqdm
+except ModuleNotFoundError:
+
+    def tqdm(values):
+        if len(values) == 1:
+            yield values[0]
+
+        terminal_size = os.get_terminal_size().columns - 1
+        for i, v in enumerate(values):
+            progress_str = f"{i+1}/{len(values)}"
+            marker_space = terminal_size - (5 + len(progress_str))
+
+            progress = i / (len(values) - 1)
+            markers = int(progress * marker_space)
+
+            print(
+                f"\r├{'█'*markers}{' '*(marker_space - markers)}┤ ({progress_str})",
+                end="",
+            )
+
+            yield v
+        print()
+
 
 sys.path.insert(0, "./designs")
 
@@ -46,7 +70,7 @@ def plot_design(design, data_path, N, eta):
     minimum, maximum = np.min(data), np.max(data)
     data = (data - minimum) / (maximum - minimum)
 
-    plt.figure(figsize=(6.4 * w/h, 4.8))
+    plt.figure(figsize=(6.4 * w / h, 4.8))
 
     X, Y = np.meshgrid(np.linspace(0, w, Nx), np.linspace(0, h, Ny))
     plt.pcolormesh(X, Y, data, cmap=black2blue)
@@ -60,7 +84,7 @@ def plot_design(design, data_path, N, eta):
 
     output_file = os.path.join("output", design, "figures", f"{N=}_{eta=}") + ".png"
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
-    plt.savefig(output_file, dpi=200, bbox_inches='tight')
+    plt.savefig(output_file, dpi=200, bbox_inches="tight")
     plt.close()
 
 
