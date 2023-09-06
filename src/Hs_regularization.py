@@ -1,9 +1,11 @@
+from src.quadrature.quadrature import get_weights
+
 from dolfin import *
 from dolfin_adjoint import *
-import numpy as np
-from quadrature.quadrature import get_weights
-import scipy.sparse as sps
+
 import scipy.sparse as sparse
+import scipy.sparse as sps
+import numpy as np
 import pickle
 
 

@@ -1,5 +1,6 @@
-import matplotlib.pyplot as plt
+from designs.design_parser import parse_design
 import matplotlib.colors as colors
+import matplotlib.pyplot as plt
 from scipy import io
 import numpy as np
 import sys
@@ -31,11 +32,6 @@ except ModuleNotFoundError:
 
             yield v
         print()
-
-
-sys.path.insert(0, "./designs")
-
-from design_parser import parse_design
 
 # create a colormap from black to white to light blue
 traa_blue = [91 / 255, 206 / 255, 250 / 255]
@@ -80,7 +76,7 @@ def plot_design(design, data_path, N, eta):
     data = (data - minimum) / (maximum - minimum)
 
     plt.figure(figsize=(6.4 * w / h, 4.8))
-    plt.rcParams.update({'font.size': 10 * np.sqrt(w / h)})
+    plt.rcParams.update({"font.size": 10 * np.sqrt(w / h)})
 
     X, Y = np.meshgrid(np.linspace(0, w, Nx), np.linspace(0, h, Ny))
     plt.pcolormesh(X, Y, data, cmap=black2blue)

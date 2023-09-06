@@ -1,9 +1,6 @@
 import os
 import sys
-
-sys.path.insert(0, "./src")
-
-from fluid_solver import FluidSolver
+from src.fluid_solver import FluidSolver
 
 
 if __name__ == "__main__":

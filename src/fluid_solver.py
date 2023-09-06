@@ -1,28 +1,26 @@
+from designs.design_parser import Region, Flow, parse_design
+
 import dolfin as df
 import dolfin_adjoint as dfa
+
 from scipy import io
 import numpy as np
 import ufl
-import sys
 import os
 
 df.set_log_level(df.LogLevel.ERROR)
 # turn off redundant output in parallel
 df.parameters["std_out_all_processes"] = False
 
-import Hs_regularization as Hs_reg
-from ipopt_solver import IPOPTSolver, IPOPTProblem
-from preprocessing import Preprocessing
-
-sys.path.insert(0, "./designs")
-
-from design_parser import parse_design
+import src.Hs_regularization as Hs_reg
+from src.ipopt_solver import IPOPTSolver, IPOPTProblem
+from src.preprocessing import Preprocessing
 
 try:
-    from pyadjoint import ipopt  # noqa: F401
+    from pyadjoint import ipopt
 except ImportError:
     print(
-        """This example depends on IPOPT and Python ipopt bindings. \
+        """This program depends on IPOPT and Python ipopt bindings. \
         When compiling IPOPT, make sure to link against HSL, as it \
         is a necessity for practical problems."""
     )
@@ -30,7 +28,7 @@ except ImportError:
 
 
 class SidesDomain(df.SubDomain):
-    def __init__(self, domain_size, sides):
+    def __init__(self, domain_size: tuple[float, float], sides: list[str]):
         super(SidesDomain, self).__init__()
         self.domain_size = domain_size
         self.sides = sides
@@ -52,7 +50,7 @@ class SidesDomain(df.SubDomain):
 
 
 class RegionDomain(df.SubDomain):
-    def __init__(self, region):
+    def __init__(self, region: Region):
         super(RegionDomain, self).__init__()
         cx, cy = region.center
         w, h = region.size
@@ -64,7 +62,7 @@ class RegionDomain(df.SubDomain):
 
 
 class PointDomain(df.SubDomain):
-    def __init__(self, point):
+    def __init__(self, point: tuple[float, float]):
         super(PointDomain, self).__init__()
         self.point = point
 
@@ -73,28 +71,28 @@ class PointDomain(df.SubDomain):
 
 
 class MeshFunctionWrapper:
-    def __init__(self, mesh):
+    def __init__(self, mesh: dfa.Mesh):
         self.meshFunction = df.cpp.mesh.MeshFunctionSizet(mesh, 1)
         self.meshFunction.set_all(0)
-        self.label_to_idx = {}
+        self.label_to_idx: dict[str, int] = {}
         self.idx = 1
 
-    def add(self, subDomain, label):
+    def add(self, subDomain: df.SubDomain, label: str):
         subDomain.mark(self.meshFunction, self.idx)
         self.label_to_idx[label] = self.idx
         self.idx += 1
 
-    def get(self, label):
+    def get(self, label: str):
         return (self.meshFunction, self.label_to_idx[label])
 
 
 class FlowBC(dfa.UserExpression):
     def __init__(self, **kwargs):
         super(FlowBC, self).__init__(kwargs)
-        self.domain_size = kwargs["domain_size"]
-        self.flows = kwargs["flows"]
+        self.domain_size: tuple[float, float] = kwargs["domain_size"]
+        self.flows: list[Flow] = kwargs["flows"]
 
-    def get_flow(self, position, center, length, rate):
+    def get_flow(self, position: float, center: float, length: float, rate: float):
         t = position - center
         if (t > -length / 2) and (t < length / 2):
             return rate * (1 - (2 * t / length) ** 2)
@@ -119,7 +117,7 @@ class FlowBC(dfa.UserExpression):
 
 
 class FluidSolver:
-    def __init__(self, design_file, N):
+    def __init__(self, design_file: str, N: int):
         self.design_file = design_file
         self.parameters, flows, no_slip, zero_pressure, max_region = parse_design(
             self.design_file
@@ -374,9 +372,3 @@ class FluidSolver:
 
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         io.savemat(filename, mdict={"data": x0, "info": [iterations, objective]})
-
-
-if __name__ == "__main__":
-    N = 40
-    solver = FluidSolver("designs/twin_pipe.json", N)
-    solver.solve()

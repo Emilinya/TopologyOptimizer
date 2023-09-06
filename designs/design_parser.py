@@ -1,6 +1,4 @@
 from dataclasses import dataclass
-import matplotlib.pyplot as plt
-import numpy as np
 import json
 
 
@@ -25,20 +23,20 @@ class Flow:
 
 @dataclass
 class Sides:
-    sides: [str]
+    sides: list[str]
 
 
 @dataclass
 class Region:
-    center: (float, float)
-    size: (float, float)
+    center: tuple[float, float]
+    size: tuple[float, float]
 
 
-def parse_design(filename):
+def parse_design(filename: str):
     with open(filename, "r") as design_file:
         design = json.load(design_file)
 
-    flows = []
+    flows: list[Flow] = []
     legal_directions = ["left", "right", "top", "bottom"]
     for flow_dict in design["flows"]:
         if not flow_dict["side"] in legal_directions:
