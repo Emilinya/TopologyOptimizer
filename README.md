@@ -8,7 +8,7 @@ This program is based on [TopOpt](https://github.com/JohannesHaubner/TopOpt) by 
 ## Usage/Examples
 
 ### Running
-The program is run using `run.py`. This program takes in two command line arguments; a design file and a domain size. The folder `designs` contains some design files, and you can easily make a custom design using those files as a template. If the design is `path/to/design.json`, the output of the program is saved to `output/design/data`. The produced data can be visualized with `plot.py`, which automatically reads all the data files, and produces corresponding figures in `output/design/figures`. `plot.py` can also take a list of designs as an argument to limit which designs it will plot. For istance,
+The program is run using `run.py`. This program takes in two command line arguments; a design file and a domain size. The folder `designs` contains some design files, and you can easily make a custom design using those files as a template. If the design is `path/to/design.json`, the output of the program is saved to `output/design/data`. The produced data can be visualized with `plot.py`, which automatically reads all the data files, and produces corresponding figures in `output/design/figures`. `plot.py` can also take a list of designs as an argument to limit which designs it will plot. For instance,
 ```bash
 python3 plot.py design1 design2
 ```
@@ -52,7 +52,7 @@ For running the MMA examples, it is required to clone the GitHub repository http
 The design files are written in json, and the settings are:
 1. objective \
     Allowed values: "minimize_power" or "maximize_flow" \
-    Description: Descides the objective function to be minimized.
+    Description: Decides the objective function to be minimized.
 2. width \
     Allowed values: `float` \
     Description: The width of the domain
@@ -69,18 +69,18 @@ The design files are written in json, and the settings are:
     - length: `float`
     - rate: `float`
 
-    Description: Defines the boundry conditions on the velocity field. Each flow describes a parabolic flow pattern. A positive rate indicates flow into the domain, and a negative flow pattern indicates flow out of the domain.
+    Description: Defines the boundary conditions on the velocity field. Each flow describes a parabolic flow pattern. A positive rate indicates flow into the domain, and a negative flow pattern indicates flow out of the domain.
 7. max_region \
     Allowed values: 
     - center: `(float, float)`
     - size: `(float, float)`
 
-    Description: The region where you want to maximize flow. Mandatory for the "maximize_flow" objective, does nothing for the "minimize_power" objective. The desired flow direction is currently hardcoded to (-1, 0).
+    Description: The region where you want to maximize flow. Mandatory for the "maximize_flow" objective, does nothing for the "minimize_power" objective. The desired flow direction is currently hard coded to (-1, 0).
 6. no_slip (optional) \
-    Allowed values: "left", "right", "top", or "bottom" \
+    Allowed values: List containing values of "left", "right", "top", or "bottom" \
     Description: The sides where there is no flow (velocity is 0). Defaults to all sides with no defined flow.
 7. zero_pressure (optional) \
-    Allowed values: "left", "right", "top", or "bottom" \
+    Allowed values: List containing values of "left", "right", "top", or "bottom" \
     Description: The sides where there is no pressure. If not set, pressure is 0 at (0, 0).
 
 ## Running Tests
