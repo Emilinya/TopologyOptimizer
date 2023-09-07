@@ -77,7 +77,7 @@ def parse_design(filename: str):
     if design.get("no_slip"):
         sides = []
         for side in design["no_slip"]:
-            if not side in legal_directions:
+            if side not in legal_directions:
                 print(f"Error: Got design with malformed no slip side: '{side}'")
                 print(f"Legal sides are: {', '.join(legal_directions)}")
                 exit(1)
@@ -88,7 +88,7 @@ def parse_design(filename: str):
     if design.get("zero_pressure"):
         sides = []
         for side in design["zero_pressure"]:
-            if not side in legal_directions:
+            if side not in legal_directions:
                 print(f"Error: Got design with malformed zero pressure side: '{side}'")
                 print(f"Legal sides are: {', '.join(legal_directions)}")
                 exit(1)

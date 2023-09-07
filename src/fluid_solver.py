@@ -1,35 +1,24 @@
-from designs.design_parser import Region, Flow, parse_design
+import os
 
+import ufl
+import numpy as np
+from scipy import io
 import dolfin as df
 import dolfin_adjoint as dfa
 
-from scipy import io
-import numpy as np
-import ufl
-import os
+import src.Hs_regularization as Hs_reg
+from src.preprocessing import Preprocessing
+from src.ipopt_solver import IPOPTSolver, IPOPTProblem
+from designs.design_parser import Region, Flow, parse_design
 
 df.set_log_level(df.LogLevel.ERROR)
 # turn off redundant output in parallel
 df.parameters["std_out_all_processes"] = False
 
-import src.Hs_regularization as Hs_reg
-from src.ipopt_solver import IPOPTSolver, IPOPTProblem
-from src.preprocessing import Preprocessing
-
-try:
-    from pyadjoint import ipopt
-except ImportError:
-    print(
-        """This program depends on IPOPT and Python ipopt bindings. \
-        When compiling IPOPT, make sure to link against HSL, as it \
-        is a necessity for practical problems."""
-    )
-    raise
-
 
 class SidesDomain(df.SubDomain):
     def __init__(self, domain_size: tuple[float, float], sides: list[str]):
-        super(SidesDomain, self).__init__()
+        super().__init__()
         self.domain_size = domain_size
         self.sides = sides
 
@@ -51,7 +40,7 @@ class SidesDomain(df.SubDomain):
 
 class RegionDomain(df.SubDomain):
     def __init__(self, region: Region):
-        super(RegionDomain, self).__init__()
+        super().__init__()
         cx, cy = region.center
         w, h = region.size
         self.x_region = (cx - w / 2, cx + w / 2)
@@ -63,38 +52,43 @@ class RegionDomain(df.SubDomain):
 
 class PointDomain(df.SubDomain):
     def __init__(self, point: tuple[float, float]):
-        super(PointDomain, self).__init__()
+        super().__init__()
         self.point = point
 
-    def inside(self, x, _):
-        return df.near(x[0], self.point[0]) and df.near(x[1], self.point[1])
+    def inside(self, pos, _):
+        return df.near(pos[0], self.point[0]) and df.near(pos[1], self.point[1])
 
 
 class MeshFunctionWrapper:
+    """
+    A wrapper around 'df.cpp.mesh.MeshFunctionSizet' that handles
+    domain indexes for you.
+    """
+
     def __init__(self, mesh: dfa.Mesh):
-        self.meshFunction = df.cpp.mesh.MeshFunctionSizet(mesh, 1)
-        self.meshFunction.set_all(0)
+        self.mesh_function = df.cpp.mesh.MeshFunctionSizet(mesh, 1)
+        self.mesh_function.set_all(0)
         self.label_to_idx: dict[str, int] = {}
         self.idx = 1
 
-    def add(self, subDomain: df.SubDomain, label: str):
-        subDomain.mark(self.meshFunction, self.idx)
+    def add(self, sub_domain: df.SubDomain, label: str):
+        sub_domain.mark(self.mesh_function, self.idx)
         self.label_to_idx[label] = self.idx
         self.idx += 1
 
     def get(self, label: str):
-        return (self.meshFunction, self.label_to_idx[label])
+        return (self.mesh_function, self.label_to_idx[label])
 
 
 class FlowBC(dfa.UserExpression):
     def __init__(self, **kwargs):
-        super(FlowBC, self).__init__(kwargs)
+        super().__init__(kwargs)
         self.domain_size: tuple[float, float] = kwargs["domain_size"]
         self.flows: list[Flow] = kwargs["flows"]
 
     def get_flow(self, position: float, center: float, length: float, rate: float):
         t = position - center
-        if (t > -length / 2) and (t < length / 2):
+        if -length / 2 < t < length / 2:
             return rate * (1 - (2 * t / length) ** 2)
         return 0
 
@@ -146,7 +140,7 @@ class FluidSolver:
         Nx, Ny = int(self.width * self.N), int(self.height * self.N)
 
         volume_fraction = self.parameters.fraction
-        self.V = self.width * self.height * volume_fraction
+        self.volume = self.width * self.height * volume_fraction
         mesh = dfa.Mesh(
             dfa.RectangleMesh(
                 df.MPI.comm_world,
@@ -214,37 +208,38 @@ class FluidSolver:
 
         # get reduced objective function: rho --> j(rho)
         dfa.set_working_tape(dfa.Tape())
-        w = self.forward(rho)
-        (u, _) = df.split(w)
+        (u, _) = df.split(self.forward(rho))
 
         # objective function
         if self.parameters.objective == "minimize_power":
-            J = dfa.assemble(
+            main_objective = dfa.assemble(
                 0.5 * df.inner(self.alpha(rho) * u, u) * df.dx
                 + 0.5 * viscosity * df.inner(df.grad(u), df.grad(u)) * df.dx
             )
         elif self.parameters.objective == "maximize_flow":
             subdomain_data, subdomain_idx = marker.get("max")
             ds = df.Measure("dS", domain=mesh, subdomain_data=subdomain_data)
-            J = dfa.assemble(
+            main_objective = dfa.assemble(
                 df.inner(df.avg(u), dfa.Constant((1.0, 0))) * ds(subdomain_idx)
             )
 
         # penalty term in objective function
-        J2 = dfa.assemble(
+        penalty_objective = dfa.assemble(
             ufl.Max(rho - 1.0, 0.0) ** 2 * df.dx + ufl.Max(-rho - 1.0, 0.0) ** 2 * df.dx
         )
 
-        self.Js = [J, J2]
+        self.objectives = [main_objective, penalty_objective]
         self.control = dfa.Control(rho)
-        self.Jeval = dfa.ReducedFunctional(J, self.control)
-        # Note: the evaluation of the gradient can be speed up since the adjoint solve requires no pde solve
-        # (see Appendix A.4)
+        self.main_objective_function = dfa.ReducedFunctional(
+            main_objective, self.control
+        )
 
         # constraints
-        volume_constraint = 1.0 / self.V * dfa.assemble((0.5 * (rho + 1)) * df.dx) - 1.0
+        volume_constraint = (
+            1.0 / self.volume * dfa.assemble((0.5 * (rho + 1)) * df.dx) - 1.0
+        )
         spherical_constraint = dfa.assemble(
-            volume_fraction / self.V * (rho * rho - 1.0) * df.dx
+            volume_fraction / self.volume * (rho * rho - 1.0) * df.dx
         )
         self.constraints = [
             dfa.ReducedFunctional(volume_constraint, self.control),
@@ -273,7 +268,7 @@ class FluidSolver:
             )
 
     def alpha(self, rho):
-        """Inverse permeability as a function of rho, equation (40)"""
+        """Inverse permeability as a function of rho."""
         equation = self.alpha_max * (
             -1.0 / 16 * rho**4 + 3.0 / 8 * rho**2 - 0.5 * rho + 3.0 / 16
         )
@@ -323,7 +318,7 @@ class FluidSolver:
         else:
             eta_scale = 1
 
-        # [lower bound, upper bound], for the three constrainst (volume, spherical, dissapation)
+        # [lower bound, upper bound], for the three constraints (volume, spherical, dissapation)
         initial_bounds = [[0.0, 0.0], [-1.0, 0.0], [-1e6, 0.0]]
         main_bounds = [[-1e6, 0.0], [0.0, 0.0], [-1e6, 0.0]]
         bounds_list = [initial_bounds] + [main_bounds] * (len(etas) - 1)
@@ -339,21 +334,19 @@ class FluidSolver:
             ).get_matrix(weight)
 
             # for performance reasons we first add J and J2 and hand the sum over to the IPOPT solver
-            Jhat = dfa.ReducedFunctional(
-                self.Js[0] + scaled_eta * self.Js[1], self.control
+            combined_objective = dfa.ReducedFunctional(
+                self.objectives[0] + scaled_eta * self.objectives[1], self.control
             )
-            # Note: the evaluation of the gradient can be speed up since the adjoint solve requires no pde solve
-            # (see Appendix A.4)
 
             if j != 0:
                 # move x0 onto sphere
                 self.x0 = self.preprocessing.move_onto_sphere(
-                    self.x0, self.V, self.width / self.height
+                    self.x0, self.volume, self.width / self.height
                 )
 
             # solve optimization problem
             problem = IPOPTProblem(
-                Jhat,
+                combined_objective,
                 self.constraints,
                 scaling_constraints,
                 bounds,
@@ -366,9 +359,18 @@ class FluidSolver:
             self.x0, iterations, objective = ipopt.solve(self.x0)
             self.save_control(self.x0, scaled_eta, iterations, objective)
 
-    def save_control(self, x0, eta, iterations, objective):
+    def save_control(self, x0, eta, iterations, combined_objective):
+        rho = self.preprocessing.dof_to_control(x0)
+        main_objective = self.main_objective_function(rho)
+
         design = os.path.splitext(os.path.basename(self.design_file))[0]
         filename = f"output/{design}/data/N={self.N}_{eta=}.mat"
 
         os.makedirs(os.path.dirname(filename), exist_ok=True)
-        io.savemat(filename, mdict={"data": x0, "info": [iterations, objective]})
+        io.savemat(
+            filename,
+            mdict={
+                "data": x0,
+                "info": [iterations, main_objective, combined_objective],
+            },
+        )

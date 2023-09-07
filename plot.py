@@ -33,6 +33,7 @@ except ModuleNotFoundError:
             yield v
         print()
 
+
 # create a colormap from black to white to light blue
 traa_blue = [91 / 255, 206 / 255, 250 / 255]
 cdict = {
@@ -58,11 +59,7 @@ black2blue = colors.LinearSegmentedColormap("testCmap", segmentdata=cdict)
 def plot_design(design, data_path, N, eta):
     mat = io.loadmat(data_path)
     data = mat["data"]
-    iterations, objective = mat.get("info", [[None, None]])[0]
-    if iterations:
-        iterations = int(iterations)
-    if objective:
-        objective = f"{objective:.3g}"
+    iterations, main_objective, *_ = mat["info"][0]
 
     parameters, *_ = parse_design(os.path.join("designs", design) + ".json")
     w, h = parameters.width, parameters.height
@@ -87,7 +84,9 @@ def plot_design(design, data_path, N, eta):
 
     plt.xlabel("$x$ []")
     plt.ylabel("$y$ []")
-    plt.title(f"{N=}, eta={eta:.5g}, {iterations=}, objective={objective}")
+    plt.title(
+        f"{N=}, eta={eta:.5g}, iterations={int(iterations)}, objective={main_objective:.3g}"
+    )
 
     output_file = os.path.join("output", design, "figures", f"{N=}_{eta=}") + ".png"
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
